@@ -16,6 +16,7 @@ DISCORD_AUTH_TOKEN = get_env_variable("DISCORD_AUTH_TOKEN")
 BOT_PREFIX = '+'
 
 DATABASE_URL = get_env_variable("DATABASE_URL").replace("postgresql://", "postgresql+asyncpg://")
+DATABASE_URL_SYNC = get_env_variable("DATABASE_URL").replace("postgresql://", "postgresql+psycopg2://")
 
 def setup_logging():
     levelname = "[ {levelname} ]"
