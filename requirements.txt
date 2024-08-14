@@ -3,4 +3,5 @@ python-dotenv
 yt-dlp
 sqlalchemy[asyncio]
 asyncpg
+psycopg2-binary
 alembic
