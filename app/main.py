@@ -1,4 +1,3 @@
-# pyright: reportUnusedFunction=false
 import os
 import logging
 import discord
@@ -31,6 +30,14 @@ def main(debug: bool = False):
         await load_cogs()
 
         await bot.tree.sync()
+
+    @bot.event
+    async def on_close():
+        logger.info('Bot is closing...')
+        await unload_cogs()
+        from app.db.engine import AsyncEngineManager
+        await AsyncEngineManager.close()
+
 
     @bot.tree.command(name='reload', description='Reloads all cogs')
     @commands.is_owner()
