@@ -1,6 +1,7 @@
 discord.py[voice]
 python-dotenv
 yt-dlp
+andesite.py
 sqlalchemy[asyncio]
 asyncpg
 psycopg2-binary
