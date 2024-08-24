@@ -10,6 +10,7 @@ import wavelink
 
 from app.db.models import MusicPlayer
 from app.db.engine import AsyncEngineManager
+from app.config import LAVALINK_HOST 
 
 class MusicCog(commands.GroupCog, name='music'):
     def __init__(self, bot: commands.Bot):
@@ -19,7 +20,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
     async def connect_nodes(self):
         await self.bot.wait_until_ready()
-        nodes = [wavelink.Node(uri='http://localhost:2333', password='youshallnotpass')]
+        nodes = [wavelink.Node(uri=f'http://{LAVALINK_HOST}:2333', password='')]
 
         await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=None)
         self.logger.info('Connected to the Lavalink node!')

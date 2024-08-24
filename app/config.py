@@ -18,6 +18,8 @@ BOT_PREFIX = '+'
 DATABASE_URL = get_env_variable("DATABASE_URL").replace("postgresql://", "postgresql+asyncpg://")
 DATABASE_URL_SYNC = get_env_variable("DATABASE_URL").replace("postgresql://", "postgresql+psycopg2://")
 
+LAVALINK_HOST = get_env_variable("LAVALINK_HOST")
+
 def setup_logging():
     levelname = "[ {levelname} ]"
     asctime = "\u001b[38;5;241m{asctime:^9}\u001b[0m"
