@@ -18,10 +18,6 @@ BOT_PREFIX = '+'
 DATABASE_URL = get_env_variable("DATABASE_URL").replace("postgresql://", "postgresql+asyncpg://")
 DATABASE_URL_SYNC = get_env_variable("DATABASE_URL").replace("postgresql://", "postgresql+psycopg2://")
 
-ANDESITE_HOST = get_env_variable("ANDESITE_HOST")
-ANDESITE_PORT = get_env_variable("ANDESITE_PORT")
-ANDESITE_PASSWORD = get_env_variable("ANDESITE_PASSWORD")
-
 def setup_logging():
     levelname = "[ {levelname} ]"
     asctime = "\u001b[38;5;241m{asctime:^9}\u001b[0m"
@@ -52,5 +48,3 @@ def setup_logging():
     logging.getLogger('bot').setLevel(logging.DEBUG)
     
     logging.getLogger('discord').setLevel(logging.INFO)
-    
-    logging.getLogger('nordvpn').setLevel(logging.INFO)

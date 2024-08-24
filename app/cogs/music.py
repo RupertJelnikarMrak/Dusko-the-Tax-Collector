@@ -4,74 +4,25 @@ from discord.ext import commands
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-import yt_dlp
-import andesite
-
 from typing import Optional, List
+
+import wavelink
 
 from app.db.models import MusicPlayer
 from app.db.engine import AsyncEngineManager
-from app.config import ANDESITE_HOST, ANDESITE_PORT, ANDESITE_PASSWORD
 
 class MusicCog(commands.GroupCog, name='music'):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.logger = logging.getLogger('bot')
-        self.andesite_client = andesite.create_client(
-                f'http://{ANDESITE_HOST}:{ANDESITE_PORT}',
-                f'ws://{ANDESITE_HOST}:{ANDESITE_PORT}',
-                ANDESITE_PASSWORD,
-                bot.user.id # type: ignore
-                )
+        self.bot.loop.create_task(self.connect_nodes())
 
-    def get_youtube_audio_dict(self, query: str | None = None, url: str | None = None) -> dict | None:
-        if query is None and url is None:
-            return None
+    async def connect_nodes(self):
+        await self.bot.wait_until_ready()
+        nodes = [wavelink.Node(uri='http://localhost:2333', password='youshallnotpass')]
 
-        ydl_opts = {
-                'format': 'bestaudio/best',  # Get the best audio quality available
-                'noplaylist': True,  # Ensure we're only dealing with a single video, not a playlist
-                # 'postprocessors': [{
-                #     'key': 'FFmpegExtractAudio',
-                #     'preferredcodec': 'Opus',
-                #     'preferredquality': '128',
-                # }],
-                'quiet': True,  # Suppress yt-dlp output
-                'ignoreerrors': True,  # Ignore errors during extraction
-                'default_search': 'ytsearch',  # Fallback to YouTube search if a query is provided
-                'nocheckcertificate': True,  # Bypass certificate verification issues
-                'retries': 3,  # Retry on failure up to 3 times
-                'geo_bypass': True,  # Bypass geo-restrictions
-                }
-
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                result = ydl.extract_info(query or url, download=False)
-                if result and 'entries' in result:
-                    print(result['entries'][0])
-                    return result['entries'][0]
-                elif result:  # In case the result is not a playlist but a single video
-                    print(result)
-                    return result
-                else:
-                    self.logger.warning('No valid result was found.')
-                    return None
-        except yt_dlp.utils.DownloadError as e:
-            self.logger.warning(f'Download error while trying to get audio URL: {e}')
-            return None
-        except yt_dlp.utils.ExtractorError as e:
-            self.logger.error(f'Extractor error: {e}')
-            return None
-        except Exception as e:
-            self.logger.error(f'An unexpected error occurred: {e}')
-            return None
-
-    def vc_play(self, voice_client: discord.VoiceClient, audio_url: str):
-        FFMPEG_BEFORE_OPTS = '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5'
-        FFMPEG_OPTIONS = '-vn -ar 48000 -ac 2 -b:a 128k -af "dynaudnorm, acompressor"'
-        source = discord.FFmpegPCMAudio(source=audio_url, before_options=FFMPEG_BEFORE_OPTS, options=FFMPEG_OPTIONS)
-
-        voice_client.play(source)
+        await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=None)
+        self.logger.info('Connected to the Lavalink node!')
 
     async def join_vc(self, interaction: discord.Interaction | None = None, channel: discord.VoiceChannel | None = None) -> discord.VoiceClient | None:
         if not channel:
@@ -287,29 +238,6 @@ class MusicCog(commands.GroupCog, name='music'):
     @app_commands.command(name='play', description='Plays audio from a youtube video or url.')
     async def play(self, interaction: discord.Interaction, query: str | None = None, url: str | None = None):
         await interaction.response.send_message('Searching for the audio...', ephemeral=True)
-        if query is None and url is None:
-            await interaction.edit_original_response(content='You must specify a query or url to play!')
-            return
-
-        audioDict = self.get_youtube_audio_dict(query, url)
-        if audioDict is None:
-            await interaction.edit_original_response(content='Could not find the audio you requested! If the issue persists check how to open an issue in the bot\'s about me.')
-            return
-
-        audioUrl = audioDict.get('url')
-        if not audioUrl:
-            await interaction.edit_original_response(content='Could not find the audio url! If the issue persists check how to open an issue in the bot\'s about me.')
-            return
-
-        current_voice_client = await self.join_vc(interaction)
-
-        if not current_voice_client:
-            await interaction.edit_original_response(content='Could not join the voice channel! If the issue persists check how to open an issue in the bot\'s about me.')
-            return
-
-        self.vc_play(current_voice_client, audioUrl)
-
-        await interaction.edit_original_response(content=f'Playing {audioDict["title"]}...')
 
     @app_commands.command(name='join', description='Joins the specified discord call')
     async def join(self, interaction: discord.Interaction, channel: discord.VoiceChannel):
