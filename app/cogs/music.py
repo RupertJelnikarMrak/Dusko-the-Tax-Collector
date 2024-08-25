@@ -270,6 +270,8 @@ class MusicCog(commands.GroupCog, name='music'):
 
         track: wavelink.Playable = tracks[0]
         await player.queue.put_wait(track)
+        if not player.playing:
+            await player.play(player.queue.get())
         await interaction.edit_original_response(content=f'Added **{track.title}** to the queue!')
 
     @app_commands.command(name='pause', description='Pauses the current audio.')
