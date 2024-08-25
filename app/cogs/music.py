@@ -69,6 +69,27 @@ class MusicCog(commands.GroupCog, name='music'):
         if guild.voice_client:
             await guild.voice_client.disconnect(force=True)
 
+    async def add_audio_to_queue(self, interaction: discord.Interaction, url_or_search: str):
+        await interaction.response.send_message('Searching for the audio...', ephemeral=True)
+        
+        player = await self.join_vc(interaction, edit_response=True, force=False)
+        if not player:
+            return
+
+        tracks: wavelink.Search = await wavelink.Playable.search(url_or_search)
+        if not tracks:
+            await interaction.edit_original_response(content='No tracks found.')
+            return
+
+        if isinstance(tracks, wavelink.Playlist):
+            await interaction.edit_original_response(content='Playlists are not yet supported.')
+            return
+
+        track: wavelink.Playable = tracks[0]
+        await player.queue.put_wait(track)
+
+        await interaction.edit_original_response(content=f'Added **{track.title}** by **{track.author}**to the queue!')
+
     class MPButtonPlay(discord.ui.Button):
         def __init__(self):
             super().__init__(label='Play', style=discord.ButtonStyle.green)
@@ -250,30 +271,9 @@ class MusicCog(commands.GroupCog, name='music'):
 
         await interaction.edit_original_response(content=f'Player created in {channel.mention}!')
 
-    @app_commands.command(name='play', description='Plays audio from a youtube video or url.')
-    async def play(self, interaction: discord.Interaction, url_or_search: str):
-        await interaction.response.send_message('Searching for the audio...', ephemeral=True)
-
-        player = await self.join_vc(interaction=interaction, edit_response=True, force=False)
-        if not player:
-            return
-
-        tracks: wavelink.Search = await wavelink.Playable.search(url_or_search)
-        if not tracks:
-            await interaction.edit_original_response(content='No tracks found.')
-            return
-
-        if isinstance(tracks, wavelink.Playlist):
-            await interaction.edit_original_response(content='Playlists are not yet supported.')
-            return
-
-        track: wavelink.Playable = tracks[0]
-        await player.queue.put_wait(track)
-        if not player.playing:
-            await player.play(player.queue.get())
-            player.autoplay = wavelink.AutoPlayMode.enabled
-            player.queue.mode = wavelink.QueueMode.normal
-        await interaction.edit_original_response(content=f'Added **{track.title}** to the queue!')
+    @app_commands.command(name='add-to-queue', description='Adds an audio to the end of the queue.')
+    async def add_to_queue(self, interaction: discord.Interaction, url_or_search: str):
+        await self.add_audio_to_queue(interaction, url_or_search)
 
     @app_commands.command(name='pause', description='Pauses the current audio.')
     async def pause(self, interaction: discord.Interaction):
