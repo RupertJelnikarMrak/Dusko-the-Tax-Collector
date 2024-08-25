@@ -269,8 +269,59 @@ class MusicCog(commands.GroupCog, name='music'):
             return
 
         track: wavelink.Playable = tracks[0]
+        await player.queue.put_wait(track)
         await interaction.edit_original_response(content=f'Added **{track.title}** to the queue!')
-        await player.play(track)
+
+    @app_commands.command(name='pause', description='Pauses the current audio.')
+    async def pause(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if not guild:
+            await interaction.edit_original_response(content='Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
+            self.logger.error('Could not determine the guild from the interaction. Likely a network issue as I see no other way of how it would happen.')
+            return
+
+        player = wavelink.Pool.get_node().get_player(guild.id)
+        if not player or not player.playing:
+            await interaction.edit_original_response(content='There is no audio playing.')
+            return
+
+        await player.pause(True)
+
+        await interaction.edit_original_response(content='Paused the audio!')
+
+    @app_commands.command(name='resume', description='Resumes the current audio.')
+    async def resume(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if not guild:
+            await interaction.edit_original_response(content='Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
+            self.logger.error('Could not determine the guild from the interaction. Likely a network issue as I see no other way of how it would happen.')
+            return
+
+        player = wavelink.Pool.get_node().get_player(guild.id)
+        if not player or not player.paused:
+            await interaction.edit_original_response(content='There is no audio paused.')
+            return
+
+        await player.pause(False)
+
+        await interaction.edit_original_response(content='Resumed the audio!')
+
+    @app_commands.command(name='skip', description='Skips the current audio.')
+    async def skip(self, interaction: discord.Interaction):
+        guild = interaction.guild
+        if not guild:
+            await interaction.edit_original_response(content='Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
+            self.logger.error('Could not determine the guild from the interaction. Likely a network issue as I see no other way of how it would happen.')
+            return
+
+        player = wavelink.Pool.get_node().get_player(guild.id)
+        if not player or not player.playing:
+            await interaction.edit_original_response(content='There is no audio playing.')
+            return
+
+        await player.skip()
+
+        await interaction.edit_original_response(content='Skipped the audio!')
 
     @app_commands.command(name='join', description='Joins the specified discord call')
     async def join(self, interaction: discord.Interaction, channel: discord.VoiceChannel):
