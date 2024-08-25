@@ -5,7 +5,7 @@ from discord.ext import commands
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import Optional, List, cast
+from typing import Optional, List
 
 import wavelink
 
@@ -25,6 +25,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
         await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
         self.logger.info('Connected to the Lavalink node!')
+        wavelink.Player.autoplay = wavelink.AutoPlayMode.enabled
 
     async def join_vc(self, interaction: Optional[discord.Interaction] = None, channel: Optional[discord.VoiceChannel] = None, edit_response: bool = False, force: bool = False) -> wavelink.Player | None:
         async def raise_error(msg: str, level: int = logging.DEBUG):
@@ -276,6 +277,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
     @app_commands.command(name='pause', description='Pauses the current audio.')
     async def pause(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Pausing the audio...', ephemeral=True)
         guild = interaction.guild
         if not guild:
             await interaction.edit_original_response(content='Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
@@ -293,6 +295,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
     @app_commands.command(name='resume', description='Resumes the current audio.')
     async def resume(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Resuming the audio...', ephemeral=True)
         guild = interaction.guild
         if not guild:
             await interaction.edit_original_response(content='Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
@@ -310,6 +313,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
     @app_commands.command(name='skip', description='Skips the current audio.')
     async def skip(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Skipping the audio...', ephemeral=True)
         guild = interaction.guild
         if not guild:
             await interaction.edit_original_response(content='Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
