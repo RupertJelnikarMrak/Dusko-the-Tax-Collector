@@ -25,7 +25,6 @@ class MusicCog(commands.GroupCog, name='music'):
 
         await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
         self.logger.info('Connected to the Lavalink node!')
-        wavelink.Player.autoplay = wavelink.AutoPlayMode.enabled
 
     async def join_vc(self, interaction: Optional[discord.Interaction] = None, channel: Optional[discord.VoiceChannel] = None, edit_response: bool = False, force: bool = False) -> wavelink.Player | None:
         async def raise_error(msg: str, level: int = logging.DEBUG):
@@ -69,7 +68,6 @@ class MusicCog(commands.GroupCog, name='music'):
     async def leave_vc(self, guild: discord.Guild):
         if guild.voice_client:
             await guild.voice_client.disconnect(force=True)
-
 
     class MPButtonPlay(discord.ui.Button):
         def __init__(self):
@@ -273,6 +271,8 @@ class MusicCog(commands.GroupCog, name='music'):
         await player.queue.put_wait(track)
         if not player.playing:
             await player.play(player.queue.get())
+            player.autoplay = wavelink.AutoPlayMode.enabled
+            player.queue.mode = wavelink.QueueMode.normal
         await interaction.edit_original_response(content=f'Added **{track.title}** to the queue!')
 
     @app_commands.command(name='pause', description='Pauses the current audio.')
