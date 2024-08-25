@@ -1,10 +1,11 @@
+import asyncio
 import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import Optional, List
+from typing import Optional, List, cast
 
 import wavelink
 
@@ -22,38 +23,52 @@ class MusicCog(commands.GroupCog, name='music'):
         await self.bot.wait_until_ready()
         nodes = [wavelink.Node(uri=f'http://{LAVALINK_HOST}:2333', password='')]
 
-        await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=None)
+        await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
         self.logger.info('Connected to the Lavalink node!')
 
-    async def join_vc(self, interaction: discord.Interaction | None = None, channel: discord.VoiceChannel | None = None) -> discord.VoiceClient | None:
-        if not channel:
-            if not interaction:
-                self.logger.error(f'join_vc() called without parameters. Pass either a discord.Interaction or discord.BoiceChannel.')
-                return None
+    async def join_vc(self, interaction: Optional[discord.Interaction] = None, channel: Optional[discord.VoiceChannel] = None, edit_response: bool = False, force: bool = False) -> wavelink.Player | None:
+        async def raise_error(msg: str, level: int = logging.DEBUG):
+            self.logger.log(level, msg)
+            if interaction and edit_response:
+                await interaction.edit_original_response(content=msg)
 
-            if isinstance(interaction.user, discord.Member) and interaction.user.voice and interaction.user.voice.channel and isinstance(interaction.user.voice.channel, discord.VoiceChannel):
-                channel = interaction.user.voice.channel
-            else:
+        if channel:
+            player: Optional[wavelink.Player] = wavelink.Pool.get_node().get_player(channel.guild.id)
+        elif interaction:
+            if not interaction.guild:
+                await raise_error('Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
                 return None
+            player: Optional[wavelink.Player] = wavelink.Pool.get_node().get_player(interaction.guild.id)
 
-        if channel.guild.voice_client: 
-            if channel.guild.voice_client.channel != channel:
-                await channel.guild.voice_client.disconnect(force=True)
+            if not isinstance(interaction.user, discord.Member) or not interaction.user.voice or not interaction.user.voice.channel or not isinstance(interaction.user.voice.channel, discord.VoiceChannel):
+                await raise_error('Neither the bot nor you are in a voice channel. Please join a voice channel or run the join command first.')
+                return None
+            channel = interaction.user.voice.channel
+        else:
+            self.logger.error('join_vc() called without parameters. Pass either a discord.Interaction or discord.BoiceChannel.')
+            return None
+
+        if player and player.connected:
+            if player.channel == channel:
+                return player
+            if force or player.channel.members.count == 1:
+                await raise_error('Leaving call')
+                await player.disconnect(force=True)
+                await asyncio.sleep(1)
+                await raise_error('Left the call')
             else:
-                if isinstance(channel.guild.voice_client, discord.VoiceClient):
-                    return channel.guild.voice_client
-                else:
-                    return None
+                return player
 
         try:
-            return await channel.connect()
-        except discord.ClientException as e:
-            self.logger.error(f'Error while trying to connect to voice channel: {e}')
+            return await channel.connect(cls=wavelink.Player)
+        except Exception as e:
+            await raise_error(f'Error while trying to connect to voice channel: {e}', level=logging.ERROR)
             return None
 
     async def leave_vc(self, guild: discord.Guild):
         if guild.voice_client:
             await guild.voice_client.disconnect(force=True)
+
 
     class MPButtonPlay(discord.ui.Button):
         def __init__(self):
@@ -237,17 +252,31 @@ class MusicCog(commands.GroupCog, name='music'):
         await interaction.edit_original_response(content=f'Player created in {channel.mention}!')
 
     @app_commands.command(name='play', description='Plays audio from a youtube video or url.')
-    async def play(self, interaction: discord.Interaction, query: str | None = None, url: str | None = None):
+    async def play(self, interaction: discord.Interaction, url_or_search: str):
         await interaction.response.send_message('Searching for the audio...', ephemeral=True)
+
+        player = await self.join_vc(interaction=interaction, edit_response=True, force=False)
+        if not player:
+            return
+
+        tracks: wavelink.Search = await wavelink.Playable.search(url_or_search)
+        if not tracks:
+            await interaction.edit_original_response(content='No tracks found.')
+            return
+
+        if isinstance(tracks, wavelink.Playlist):
+            await interaction.edit_original_response(content='Playlists are not yet supported.')
+            return
+
+        track: wavelink.Playable = tracks[0]
+        await interaction.edit_original_response(content=f'Added **{track.title}** to the queue!')
+        await player.play(track)
 
     @app_commands.command(name='join', description='Joins the specified discord call')
     async def join(self, interaction: discord.Interaction, channel: discord.VoiceChannel):
         await interaction.response.send_message(f'Joining {channel.mention}...', ephemeral=True)
         
-        voice_client = await self.join_vc(channel=channel)
-
-        if not voice_client:
-            await interaction.edit_original_response(content='Failed to join the channel specified')
+        await self.join_vc(channel=channel, edit_response=True, force=True)
 
         await interaction.edit_original_response(content=f'Successfully joined {channel.mention}!')
 
