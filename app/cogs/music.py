@@ -6,7 +6,7 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import Optional, List, Callable, Coroutine, Any
+from typing import Optional, List
 
 import wavelink
 
@@ -77,7 +77,10 @@ class MusicCog(commands.GroupCog, name='music'):
                 return player
 
         try:
-            return await channel.connect(cls=wavelink.Player)
+            player = await channel.connect(cls=wavelink.Player)
+            player.queue.mode = wavelink.QueueMode.normal
+            player.autoplay = wavelink.AutoPlayMode.enabled
+            return player
         except Exception as e:
             await raise_error(f'Error while trying to connect to voice channel: {e}', level=logging.ERROR)
             return None
