@@ -102,6 +102,7 @@ class MusicCog(commands.GroupCog, name='music'):
         
         player = await self.get_player_from_interaction(interaction)
         if not player:
+            await interaction.edit_original_response(content='Player not found. Add the bot to a voice channel to create it.') 
             return
 
         tracks: wavelink.Search = await wavelink.Playable.search(url_or_search)
@@ -178,9 +179,10 @@ class MusicCog(commands.GroupCog, name='music'):
 
         async def on_submit_handler(interaction: discord.Interaction):
             url_or_search = url_or_search_input.value
+            player = await self.join_vc(interaction=interaction, edit_response=True)
+
             await self.add_audio_to_queue(interaction, url_or_search)
 
-            player = await self.get_player_from_interaction(interaction)
             if player and not player.playing:
                 await player.play(player.queue.get())
 
