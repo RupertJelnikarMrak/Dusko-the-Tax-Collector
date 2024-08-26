@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 import logging
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import Optional, List, Callable, Coroutine, Any
@@ -18,6 +19,7 @@ class MusicCog(commands.GroupCog, name='music'):
         self.bot = bot
         self.logger = logging.getLogger('bot')
         self.bot.loop.create_task(self.connect_nodes())
+        self.bot.loop.create_task(self.update_all_player_message())
 
     async def connect_nodes(self):
         await self.bot.wait_until_ready()
@@ -328,6 +330,19 @@ class MusicCog(commands.GroupCog, name='music'):
         player_view = await self.create_music_player_view(player)
 
         await player_message.edit(embeds=player_embeds, view=player_view)
+
+    async def update_all_player_message(self) -> None:
+        async with AsyncEngineManager.get_session() as session:
+            players = (await session.execute(select(MusicPlayer))).scalars().all()
+            for player in players:
+                guild = self.bot.get_guild(player.guild_id)
+                if not guild:
+                    await session.delete(player)
+                    continue
+
+                await self.update_player_message(guild)
+            
+            await session.commit()
 
 
     @commands.Cog.listener()
