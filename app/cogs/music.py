@@ -5,7 +5,7 @@ from discord.ext import commands
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from typing import Optional, List
+from typing import Optional, List, Callable, Coroutine, Any
 
 import wavelink
 
@@ -83,7 +83,7 @@ class MusicCog(commands.GroupCog, name='music'):
         if guild.voice_client:
             await guild.voice_client.disconnect(force=True)
 
-    async def add_audio_to_queue(self, interaction: discord.Interaction, url_or_search: str) -> None:
+    async def add_audio_to_queue(self, interaction: discord.Interaction, url_or_search: str, prepend: bool = False) -> None:
         """
         Searches for an audio and adds it to the queue.
 
@@ -114,6 +114,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
         track: wavelink.Playable = tracks[0]
         await player.queue.put_wait(track)
+        await player.queue.put_at
 
         await self.update_player_message(interaction.guild) # type: ignore # interaction.guild cannot be none since checked in get_player_from_interaction
 
@@ -183,11 +184,24 @@ class MusicCog(commands.GroupCog, name='music'):
         modal.on_submit = on_submit_handler
         return modal
 
+    def get_queue_item_selection(self, player: wavelink.Player, placeholder: str = 'Select a song') -> discord.ui.Select:
+        options = []
+        for i in range(0, player.queue.count):
+            track = player.queue.get_at(i)
+            options.append(discord.SelectOption(label=f'{i}. {track.title}', value=str(i)))
+
+        select = discord.ui.Select(
+                placeholder=placeholder,
+                options=options
+                )
+
+        return select
+
     async def create_music_player_view(self, player: Optional[wavelink.Player] = None) -> discord.ui.View:
         from discord.ui import Button
         from discord.enums import ButtonStyle
 
-        view = discord.ui.View()
+        view = discord.ui.View(timeout=None)
 
         async def play_callback(interaction: discord.Interaction):
             await interaction.response.send_modal(self.get_add_song_modal())
@@ -197,8 +211,19 @@ class MusicCog(commands.GroupCog, name='music'):
             if player and player.playing:
                 await player.disconnect()
 
+        async def skip_callback(interaction: discord.Interaction):
+            player = await self.get_player_from_interaction(interaction)
+            if player and player.playing:
+                await player.skip()
+
         async def add_song_callback(interaction: discord.Interaction):
             await interaction.response.send_modal(self.get_add_song_modal())
+
+        async def resume_song_callback(interaction: discord.Interaction):
+            await self.pause_resume_audio(interaction, 0)
+
+        async def pause_song_callback(interaction: discord.Interaction):
+            await self.pause_resume_audio(interaction, 1)
 
         if not player or not player.playing:
             button = Button(label='Play', style=ButtonStyle.green)
@@ -206,10 +231,14 @@ class MusicCog(commands.GroupCog, name='music'):
             view.add_item(button)
 
         if player and player.playing and not player.paused:
-            view.add_item(Button(label='Pause', style=ButtonStyle.gray))
+            button = Button(label='Pause', style=ButtonStyle.gray)
+            button.callback = pause_song_callback
+            view.add_item(button)
 
         if player and  player.playing and player.paused:
-            view.add_item(Button(label='Resume', style=ButtonStyle.gray))
+            button = Button(label='Resume', style=ButtonStyle.gray)
+            button.callback = resume_song_callback
+            view.add_item(button)
 
         button = Button(label='Stop', style=ButtonStyle.red, disabled=not player)
         button.callback = stop_callback
@@ -219,9 +248,14 @@ class MusicCog(commands.GroupCog, name='music'):
         button.callback = add_song_callback
         view.add_item(button)
 
-        view.add_item(Button(label='Skip', style=ButtonStyle.gray, row=1, disabled=not player or not player.playing))
+        button = Button(label='Skip', style=ButtonStyle.gray, row=1, disabled=not player or not player.playing)
+        button.callback = skip_callback
+        view.add_item(button)
 
-        view.add_item(Button(label='Remove song', style=ButtonStyle.gray, row=1, disabled=not player or player.queue.is_empty))
+        # view.add_item(Button(label='Remove song', style=ButtonStyle.gray, row=1, disabled=not player or player.queue.is_empty))
+        view.add_item(Button(label='Remove', style=ButtonStyle.gray, row=1, disabled=True))
+
+        view.add_item(Button(label='Swap', style=ButtonStyle.gray, row=1, disabled=True))
 
         view.add_item(Button(label='Clear queue', style=ButtonStyle.red, row=1, disabled=not player or player.queue.is_empty))
 
@@ -238,7 +272,7 @@ class MusicCog(commands.GroupCog, name='music'):
         embeds = []
 
         queue_content = ''
-        for i in range(player.queue.count, 0):
+        for i in range(player.queue.count - 1, 0):
             track = player.queue.get_at(i)
             queue_content += f'{i + 1}. [{track.title}]({track.uri}) by {track.author}\n'
 
@@ -396,26 +430,16 @@ class MusicCog(commands.GroupCog, name='music'):
 
         await interaction.edit_original_response(content=f'Player created in {channel.mention}!')
 
-    @app_commands.command(name='add-to-queue', description='Adds an audio to the end of the queue.')
-    async def add_to_queue(self, interaction: discord.Interaction, url_or_search: str):
+    @app_commands.command(name='quick-play', description='Adds an audio to the end of the queue.')
+    async def quick_play(self, interaction: discord.Interaction, url_or_search: str):
         player = await self.join_vc(interaction=interaction, edit_response=True)
         if not player:
             return
+
         await self.add_audio_to_queue(interaction, url_or_search)
 
         if not player.playing:
             await player.play(player.queue.get())
-
-    @app_commands.command(name='play', description='Plays the audio.')
-    async def play(self, interaction: discord.Interaction):
-        await interaction.response.send_message('Playing the audio...', ephemeral=True)
-        player = await self.join_vc(interaction=interaction, edit_response=True)
-        if not player:
-            return
-
-        await player.play(player.queue.get())
-
-        await interaction.edit_original_response(content='Playing the audio!')
 
     @app_commands.command(name='pause', description='Pauses the current audio.')
     async def pause(self, interaction: discord.Interaction):
