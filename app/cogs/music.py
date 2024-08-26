@@ -158,16 +158,22 @@ class MusicCog(commands.GroupCog, name='music'):
                 await player.pause(not player.paused)
             else:
                 await respond('There is no audio paused.')
+                return
         elif pause == 1:
             if not player.paused:
                 await player.pause(True)
             else:
                 await respond('The audio is already paused.')
+                return
         elif pause == 0:
             if player.paused:
                 await player.pause(False)
             else:
                 await respond('The audio is not paused.')
+                return
+
+        if interaction.guild:
+            await self.update_player_message(interaction.guild)
 
     def get_add_song_modal(self) -> discord.ui.Modal:
         modal = discord.ui.Modal(title='Add song to queue')
@@ -194,19 +200,6 @@ class MusicCog(commands.GroupCog, name='music'):
         modal.on_submit = on_submit_handler
         return modal
 
-    def get_queue_item_selection(self, player: wavelink.Player, placeholder: str = 'Select a song') -> discord.ui.Select:
-        options = []
-        for i in range(0, player.queue.count):
-            track = player.queue.get_at(i)
-            options.append(discord.SelectOption(label=f'{i}. {track.title}', value=str(i)))
-
-        select = discord.ui.Select(
-                placeholder=placeholder,
-                options=options
-                )
-
-        return select
-
     async def create_music_player_view(self, player: Optional[wavelink.Player] = None) -> discord.ui.View:
         from discord.ui import Button
         from discord.enums import ButtonStyle
@@ -222,6 +215,8 @@ class MusicCog(commands.GroupCog, name='music'):
                 await player.disconnect()
             await interaction.response.send_message('Stopped the audio!', ephemeral=True)
             await interaction.delete_original_response()
+            if interaction.guild:
+                await self.update_player_message(interaction.guild)
 
         async def skip_callback(interaction: discord.Interaction):
             player = await self.get_player_from_interaction(interaction)
@@ -229,6 +224,8 @@ class MusicCog(commands.GroupCog, name='music'):
                 await player.skip()
             await interaction.response.send_message('Skipped the song', ephemeral=True)
             await interaction.delete_original_response()
+            if interaction.guild:
+                await self.update_player_message(interaction.guild)
 
         async def add_song_callback(interaction: discord.Interaction):
             await interaction.response.send_modal(self.get_add_song_modal())
@@ -237,11 +234,15 @@ class MusicCog(commands.GroupCog, name='music'):
             await interaction.response.send_message('Resumed the audio!', ephemeral=True)
             await self.pause_resume_audio(interaction, 0)
             await interaction.delete_original_response()
+            if interaction.guild:
+                await self.update_player_message(interaction.guild)
 
         async def pause_song_callback(interaction: discord.Interaction):
             await interaction.response.send_message('Paused the audio!', ephemeral=True)
             await self.pause_resume_audio(interaction, 1)
             await interaction.delete_original_response()
+            if interaction.guild:
+                await self.update_player_message(interaction.guild)
 
         if not player or not player.playing:
             button = Button(label='Play', style=ButtonStyle.green)
@@ -364,7 +365,7 @@ class MusicCog(commands.GroupCog, name='music'):
     async def on_wavelink_player_update(self, payload: wavelink.PlayerUpdateEventPayload) -> None:
         if not payload.player or not payload.player.guild:
             return
-        await self.update_player_message(payload.player.guild)
+        # await self.update_player_message(payload.player.guild)
 
     @commands.Cog.listener()
     async def on_wavelink_track_start(self, payload: wavelink.TrackEndEventPayload) -> None:
