@@ -310,6 +310,7 @@ class MusicCog(commands.GroupCog, name='music'):
         return embeds
 
     async def update_player_message(self, guild: discord.Guild) -> None:
+        self.logger.debug(f'Updating player message in guild {guild.id}...')
         async with AsyncEngineManager.get_session() as session:
             db_player_message = await session.get(MusicPlayer, guild.id)
             if not db_player_message:
