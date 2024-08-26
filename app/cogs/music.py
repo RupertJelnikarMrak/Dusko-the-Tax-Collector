@@ -217,20 +217,28 @@ class MusicCog(commands.GroupCog, name='music'):
             player = await self.get_player_from_interaction(interaction)
             if player and player.playing:
                 await player.disconnect()
+            await interaction.response.send_message('Stopped the audio!', ephemeral=True)
+            await interaction.delete_original_response()
 
         async def skip_callback(interaction: discord.Interaction):
             player = await self.get_player_from_interaction(interaction)
             if player and player.playing:
                 await player.skip()
+            await interaction.response.send_message('Skipped the song', ephemeral=True)
+            await interaction.delete_original_response()
 
         async def add_song_callback(interaction: discord.Interaction):
             await interaction.response.send_modal(self.get_add_song_modal())
 
         async def resume_song_callback(interaction: discord.Interaction):
+            await interaction.response.send_message('Resumed the audio!', ephemeral=True)
             await self.pause_resume_audio(interaction, 0)
+            await interaction.delete_original_response()
 
         async def pause_song_callback(interaction: discord.Interaction):
+            await interaction.response.send_message('Paused the audio!', ephemeral=True)
             await self.pause_resume_audio(interaction, 1)
+            await interaction.delete_original_response()
 
         if not player or not player.playing:
             button = Button(label='Play', style=ButtonStyle.green)
