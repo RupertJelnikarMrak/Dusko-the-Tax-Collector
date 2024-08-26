@@ -120,7 +120,7 @@ class MusicCog(commands.GroupCog, name='music'):
             return
 
         track: wavelink.Playable = tracks[0]
-        if prepend:
+        if prepend == True:
             player.queue.put_at(0, track)
         else:
             await player.queue.put_wait(track)
@@ -284,7 +284,7 @@ class MusicCog(commands.GroupCog, name='music'):
         from discord import Embed
         if not player:
             return [
-                    Embed(title='Queue', color=discord.Color.purple()),
+                    Embed(title='Queue', color=discord.Color.purple(), description='No audio in the queue.'),
                     Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
                     ]
 
@@ -292,7 +292,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
         queue_content = ''
         if not player.queue.is_empty:
-            for i in range(player.queue.count - 1, 0, -1):
+            for i in range(player.queue.count - 1, -1, -1):
                 track = player.queue.get_at(i)
                 queue_content += f'{i + 1}. [{track.title}]({track.uri})\n'
         else:
