@@ -291,7 +291,7 @@ class MusicCog(commands.GroupCog, name='music'):
         embeds = []
 
         queue_content = ''
-        if not player.queue.is_empty:
+        if not player.queue.is_empty == True:
             for i in range(player.queue.count - 1, -1, -1):
                 track = player.queue.get_at(i)
                 queue_content += f'{i + 1}. [{track.title}]({track.uri})\n'
