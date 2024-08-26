@@ -21,9 +21,10 @@ class MusicCog(commands.GroupCog, name='music'):
 
     async def connect_nodes(self):
         await self.bot.wait_until_ready()
-        nodes = [wavelink.Node(uri=f'http://{LAVALINK_HOST}:2333', password='')]
+        node = wavelink.Node(uri=f'http://{LAVALINK_HOST}:2333', password='')
+        node._inactive_player_timeout = 30
 
-        await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
+        await wavelink.Pool.connect(nodes=[node], client=self.bot, cache_capacity=100)
         self.logger.info('Connected to the Lavalink node!')
 
     async def get_player_from_interaction(self, interaction: discord.Interaction) -> wavelink.Player | None:
@@ -113,8 +114,10 @@ class MusicCog(commands.GroupCog, name='music'):
             return
 
         track: wavelink.Playable = tracks[0]
-        await player.queue.put_wait(track)
-        await player.queue.put_at
+        if prepend:
+            player.queue.put_at(0, track)
+        else:
+            await player.queue.put_wait(track)
 
         await self.update_player_message(interaction.guild) # type: ignore # interaction.guild cannot be none since checked in get_player_from_interaction
 
@@ -330,6 +333,20 @@ class MusicCog(commands.GroupCog, name='music'):
         if not payload.player or not payload.player.guild:
             return
         await self.update_player_message(payload.player.guild)
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_start(self, payload: wavelink.TrackEndEventPayload) -> None:
+        if not payload.player or not payload.player.guild:
+            return
+        await self.update_player_message(payload.player.guild)
+
+    @commands.Cog.listener()
+    async def on_wavelink_inactive_player(self, player: wavelink.Player) -> None:
+        if player.guild:
+            await self.update_player_message(player.guild)
+
+        await player.disconnect()
+
 
     @app_commands.command(name='create_player', description='Creates a music player. Owner only!')
     @commands.is_owner()
