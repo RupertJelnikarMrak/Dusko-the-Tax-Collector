@@ -121,8 +121,10 @@ class MusicCog(commands.GroupCog, name='music'):
 
         track: wavelink.Playable = tracks[0]
         if prepend == True:
+            self.logger.info('Prepending the track to the queue.')
             player.queue.put_at(0, track)
         else:
+            self.logger.info('Appending the track to the queue.')
             await player.queue.put_wait(track)
 
         await self.update_player_message(interaction.guild) # type: ignore # interaction.guild cannot be none since checked in get_player_from_interaction
@@ -194,7 +196,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
             await self.add_audio_to_queue(interaction, url_or_search)
 
-            if player and not player.playing:
+            if player and not player.playing and not player.queue.is_empty:
                 await player.play(player.queue.get())
 
         modal.on_submit = on_submit_handler
