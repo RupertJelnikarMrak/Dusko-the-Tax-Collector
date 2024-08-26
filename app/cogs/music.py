@@ -291,9 +291,11 @@ class MusicCog(commands.GroupCog, name='music'):
 
         queue_content = ''
         if not player.queue.is_empty:
-            for i in range(player.queue.count - 1, 0):
+            for i in range(player.queue.count - 1, 0, -1):
                 track = player.queue.get_at(i)
-                queue_content += f'{i + 1}. [{track.title}]({track.uri}) by {track.author}\n'
+                queue_content += f'{i + 1}. [{track.title}]({track.uri})\n'
+        else:
+            queue_content = 'No audio in the queue.'
 
         embeds.append(Embed(title='Queue', description=queue_content, color=discord.Color.purple()))
 
