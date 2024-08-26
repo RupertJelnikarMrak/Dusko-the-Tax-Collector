@@ -26,7 +26,26 @@ class MusicCog(commands.GroupCog, name='music'):
         await wavelink.Pool.connect(nodes=nodes, client=self.bot, cache_capacity=100)
         self.logger.info('Connected to the Lavalink node!')
 
+    async def get_player_from_interaction(self, interaction: discord.Interaction) -> wavelink.Player | None:
+        if not interaction.guild:
+            self.logger.error('Guild could not determine the guild from an interaction. Probbably a network issue, safe to ignore unless it happens often.')
+            return None
+
+        return wavelink.Pool.get_node().get_player(interaction.guild.id)
+
     async def join_vc(self, interaction: Optional[discord.Interaction] = None, channel: Optional[discord.VoiceChannel] = None, edit_response: bool = False, force: bool = False) -> wavelink.Player | None:
+        """
+        Attempts to join either the specified voice channel or the voice channel of the author of the interaction if available.
+
+        Parameters:
+            interaction (Optional[discord.Interaction]): The interaction object.
+            channel (Optional[discord.VoiceChannel]): The voice channel to join.
+            edit_response (bool): Whether to edit the response or not, only works if interaction is passed.
+            force (bool): Whether to disconnect the bot from it's current voice channel if it is in one.
+
+        Returns:
+            wavelink.Player | None: The player object if successful, None otherwise
+        """
         async def raise_error(msg: str, level: int = logging.DEBUG):
             self.logger.log(level, msg)
             if interaction and edit_response:
@@ -35,10 +54,7 @@ class MusicCog(commands.GroupCog, name='music'):
         if channel:
             player: Optional[wavelink.Player] = wavelink.Pool.get_node().get_player(channel.guild.id)
         elif interaction:
-            if not interaction.guild:
-                await raise_error('Could not determine the guild from the interaction. If the issue persists check how to open an issue in the bot\'s about me.')
-                return None
-            player: Optional[wavelink.Player] = wavelink.Pool.get_node().get_player(interaction.guild.id)
+            player: Optional[wavelink.Player] = await self.get_player_from_interaction(interaction)
 
             if not isinstance(interaction.user, discord.Member) or not interaction.user.voice or not interaction.user.voice.channel or not isinstance(interaction.user.voice.channel, discord.VoiceChannel):
                 await raise_error('Neither the bot nor you are in a voice channel. Please join a voice channel or run the join command first.')
@@ -52,10 +68,8 @@ class MusicCog(commands.GroupCog, name='music'):
             if player.channel == channel:
                 return player
             if force or player.channel.members.count == 1:
-                await raise_error('Leaving call')
                 await player.disconnect(force=True)
                 await asyncio.sleep(1)
-                await raise_error('Left the call')
             else:
                 return player
 
@@ -65,14 +79,27 @@ class MusicCog(commands.GroupCog, name='music'):
             await raise_error(f'Error while trying to connect to voice channel: {e}', level=logging.ERROR)
             return None
 
-    async def leave_vc(self, guild: discord.Guild):
+    async def leave_vc(self, guild: discord.Guild) -> None:
         if guild.voice_client:
             await guild.voice_client.disconnect(force=True)
 
-    async def add_audio_to_queue(self, interaction: discord.Interaction, url_or_search: str):
-        await interaction.response.send_message('Searching for the audio...', ephemeral=True)
+    async def add_audio_to_queue(self, interaction: discord.Interaction, url_or_search: str) -> None:
+        """
+        Searches for an audio and adds it to the queue.
+
+        Parameters:
+            interaction (discord.Interaction): The interaction object.
+            url_or_search (str): The url or search query.
+
+        Returns:
+            None
+        """
+        if interaction.response.is_done == False:
+            await interaction.edit_original_response(content='Searching for the audio...')
+        else:
+            await interaction.response.send_message('Searching for the audio...', ephemeral=True)
         
-        player = await self.join_vc(interaction, edit_response=True, force=False)
+        player = await self.get_player_from_interaction(interaction)
         if not player:
             return
 
@@ -88,89 +115,187 @@ class MusicCog(commands.GroupCog, name='music'):
         track: wavelink.Playable = tracks[0]
         await player.queue.put_wait(track)
 
+        await self.update_player_message(interaction.guild) # type: ignore # interaction.guild cannot be none since checked in get_player_from_interaction
+
         await interaction.edit_original_response(content=f'Added **{track.title}** by **{track.author}**to the queue!')
 
-    class MPButtonPlay(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Play', style=discord.ButtonStyle.green)
+    async def pause_resume_audio(self, interaction: discord.Interaction, pause: int, respond_to_interaction: bool = True) -> None:
+        """
+        Pauses, resumes or toggles the audio.
 
-        async def callback(self, interaction: discord.Interaction):
-            pass
+        Parameters:
+            interaction (discord.Interaction): The interaction object.
+            pause (int): 1 to pause, 0 to resume, 2 to toggle.
+            respond_to_interaction (bool): Whether to respond to the interaction or not with pottential errors.
 
-    class MPButtonPause(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Pause', style=discord.ButtonStyle.green)
+        Returns:
+            None
+        """
+        async def respond(content: str):
+            if respond_to_interaction:
+                if interaction.response.is_done:
+                    await interaction.edit_original_response(content=content)
+                else:
+                    await interaction.response.send_message(content, ephemeral=True)
 
-        async def callback(self, interaction: discord.Interaction):
-            pass
+        player: Optional[wavelink.Player] = await self.get_player_from_interaction(interaction)
+        if not player or not player.playing:
+            await respond('There is no audio playing.')
+            return
 
-    class MPButtonResume(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Resume', style=discord.ButtonStyle.green)
+        if pause == 2:
+            if not player.paused or player.playing:
+                await player.pause(not player.paused)
+            else:
+                await respond('There is no audio paused.')
+        elif pause == 1:
+            if not player.paused:
+                await player.pause(True)
+            else:
+                await respond('The audio is already paused.')
+        elif pause == 0:
+            if player.paused:
+                await player.pause(False)
+            else:
+                await respond('The audio is not paused.')
 
-        async def callback(self, interaction: discord.Interaction):
-            pass
+    def get_add_song_modal(self) -> discord.ui.Modal:
+        modal = discord.ui.Modal(title='Add song to queue')
 
-    class MPButtonSkip(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Skip', style=discord.ButtonStyle.blurple)
+        url_or_search_input = discord.ui.TextInput(
+                label='Enter the url or search query for the audio',
+                style=discord.TextStyle.short,
+                placeholder='URL or search query',
+                required=True,
+                max_length=200
+                )
 
-        async def callback(self, interaction: discord.Interaction):
-            pass
+        modal.add_item(url_or_search_input)
 
-    class MPButtonStop(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Stop', style=discord.ButtonStyle.danger)
+        async def on_submit_handler(interaction: discord.Interaction):
+            url_or_search = url_or_search_input.value
+            await self.add_audio_to_queue(interaction, url_or_search)
 
-        async def callback(self, interaction: discord.Interaction):
-            pass
+            player = await self.get_player_from_interaction(interaction)
+            if player and not player.playing:
+                await player.play(player.queue.get())
 
-    class MPButtonAdd(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Add', style=discord.ButtonStyle.gray, row=1)
+        modal.on_submit = on_submit_handler
+        return modal
 
-        async def callback(self, interaction: discord.Interaction):
-            pass
+    async def create_music_player_view(self, player: Optional[wavelink.Player] = None) -> discord.ui.View:
+        from discord.ui import Button
+        from discord.enums import ButtonStyle
 
-    class MPButtonMove(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Move', style=discord.ButtonStyle.gray, row=1)
-
-        async def callback(self, interaction: discord.Interaction):
-            pass
-
-    class MPButtonRemove(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='Remove', style=discord.ButtonStyle.gray, row=1)
-
-        async def callback(self, interaction: discord.Interaction):
-            pass
-
-    class MPButtonLoop(discord.ui.Button):
-        def __init__(self):
-            super().__init__(label='loop', style=discord.ButtonStyle.gray, row=1)
-
-        async def callback(self, interaction: discord.Interaction):
-            pass
-
-    def create_music_player_view(self) -> discord.ui.View:
         view = discord.ui.View()
-        view.add_item(self.MPButtonPlay())
-        view.add_item(self.MPButtonStop())
-        view.add_item(self.MPButtonSkip())
-        view.add_item(self.MPButtonAdd())
-        view.add_item(self.MPButtonRemove())
-        view.add_item(self.MPButtonMove())
-        view.add_item(self.MPButtonLoop())
+
+        async def play_callback(interaction: discord.Interaction):
+            await interaction.response.send_modal(self.get_add_song_modal())
+
+        async def stop_callback(interaction: discord.Interaction):
+            player = await self.get_player_from_interaction(interaction)
+            if player and player.playing:
+                await player.disconnect()
+
+        async def add_song_callback(interaction: discord.Interaction):
+            await interaction.response.send_modal(self.get_add_song_modal())
+
+        if not player or not player.playing:
+            button = Button(label='Play', style=ButtonStyle.green)
+            button.callback = play_callback
+            view.add_item(button)
+
+        if player and player.playing and not player.paused:
+            view.add_item(Button(label='Pause', style=ButtonStyle.gray))
+
+        if player and  player.playing and player.paused:
+            view.add_item(Button(label='Resume', style=ButtonStyle.gray))
+
+        button = Button(label='Stop', style=ButtonStyle.red, disabled=not player)
+        button.callback = stop_callback
+        view.add_item(button)
+
+        button = Button(label='Add song', style=ButtonStyle.gray, row=1, disabled=not player)
+        button.callback = add_song_callback
+        view.add_item(button)
+
+        view.add_item(Button(label='Skip', style=ButtonStyle.gray, row=1, disabled=not player or not player.playing))
+
+        view.add_item(Button(label='Remove song', style=ButtonStyle.gray, row=1, disabled=not player or player.queue.is_empty))
+
+        view.add_item(Button(label='Clear queue', style=ButtonStyle.red, row=1, disabled=not player or player.queue.is_empty))
 
         return view
 
-    def create_mp_embeds(self) -> List[discord.Embed] | None:
+    def create_mp_embeds(self, player: Optional[wavelink.Player] = None) -> List[discord.Embed]:
         from discord import Embed
-        return [
-                Embed(title='Queue', color=discord.Color.purple()),
-                Embed(title='Currently playing', color=discord.Color.red()),
-                ]
+        if not player:
+            return [
+                    Embed(title='Queue', color=discord.Color.purple()),
+                    Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
+                    ]
+
+        embeds = []
+
+        queue_content = ''
+        for i in range(player.queue.count, 0):
+            track = player.queue.get_at(i)
+            queue_content += f'{i + 1}. [{track.title}]({track.uri}) by {track.author}\n'
+
+        embeds.append(Embed(title='Queue', description=queue_content, color=discord.Color.purple()))
+
+        if player.current:
+            current_embed = Embed(title=player.current.title, url=player.current.uri, color=discord.Color.brand_red())
+            current_embed.set_author(name=player.current.author)
+            current_embed.set_image(url=player.current.isrc)
+        else:
+            current_embed = Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
+        embeds.append(current_embed)
+
+        return embeds
+
+    async def update_player_message(self, guild: discord.Guild) -> None:
+        async with AsyncEngineManager.get_session() as session:
+            db_player_message = await session.get(MusicPlayer, guild.id)
+            if not db_player_message:
+                return
+
+            player_channel = await guild.fetch_channel(db_player_message.channel_id)
+            if not player_channel:
+                await session.delete(db_player_message)
+                await session.commit()
+                return
+
+            if not isinstance(player_channel, discord.TextChannel):
+                self.logger.error(f'Channel {player_channel.id} is not a text channel. This should not happen, check how the id if a non-text channel got into the database.'
+                                  f'DB info: [guild_id: {db_player_message.guild_id}, channel_id: {db_player_message.channel_id}, message_id: {db_player_message.message_id}]'
+                                  f'Deleting the false player message from the database.')
+                await session.delete(db_player_message)
+                await session.commit()
+                return
+
+            player_message = await player_channel.fetch_message(db_player_message.message_id)
+            if not player_message:
+                await session.delete(db_player_message)
+                await session.commit()
+                return
+
+        player: Optional[wavelink.Player] = wavelink.Pool.get_node().get_player(guild.id)
+        player_embeds = self.create_mp_embeds(player)
+        if not player_embeds:
+            self.logger.error(f'Could not create embeds for the music player in the guild(id: {guild.id}).')
+            return
+
+        player_view = await self.create_music_player_view(player)
+
+        await player_message.edit(embeds=player_embeds, view=player_view)
+
+
+    @commands.Cog.listener()
+    async def on_wavelink_player_update(self, payload: wavelink.PlayerUpdateEventPayload) -> None:
+        if not payload.player or not payload.player.guild:
+            return
+        await self.update_player_message(payload.player.guild)
 
     @app_commands.command(name='create_player', description='Creates a music player. Owner only!')
     @commands.is_owner()
@@ -178,11 +303,11 @@ class MusicCog(commands.GroupCog, name='music'):
 
         async def make_player(channel: discord.TextChannel, session: AsyncSession) -> int:
             playerEmbeds = self.create_mp_embeds()
-            if playerEmbeds:
-                view = self.create_music_player_view()
-                playerMessage = await channel.send(embeds=playerEmbeds, view=view)
-            else:
+            if not playerEmbeds:
                 return 1
+
+            view = await self.create_music_player_view(player=None)
+            playerMessage = await channel.send(embeds=playerEmbeds, view=view)
 
             session.add(MusicPlayer(guild_id=interaction.guild_id, channel_id=channel.id, message_id=playerMessage.id))
             return 0
@@ -273,7 +398,24 @@ class MusicCog(commands.GroupCog, name='music'):
 
     @app_commands.command(name='add-to-queue', description='Adds an audio to the end of the queue.')
     async def add_to_queue(self, interaction: discord.Interaction, url_or_search: str):
+        player = await self.join_vc(interaction=interaction, edit_response=True)
+        if not player:
+            return
         await self.add_audio_to_queue(interaction, url_or_search)
+
+        if not player.playing:
+            await player.play(player.queue.get())
+
+    @app_commands.command(name='play', description='Plays the audio.')
+    async def play(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Playing the audio...', ephemeral=True)
+        player = await self.join_vc(interaction=interaction, edit_response=True)
+        if not player:
+            return
+
+        await player.play(player.queue.get())
+
+        await interaction.edit_original_response(content='Playing the audio!')
 
     @app_commands.command(name='pause', description='Pauses the current audio.')
     async def pause(self, interaction: discord.Interaction):

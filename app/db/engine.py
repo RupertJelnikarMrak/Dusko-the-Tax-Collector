@@ -7,7 +7,7 @@ class AsyncEngineManager:
     @classmethod
     def get_engine(cls) -> AsyncEngine:
         if cls._engine is None:
-            cls._engine = create_async_engine(DATABASE_URL, echo=True)
+            cls._engine = create_async_engine(DATABASE_URL, echo=False)
         return cls._engine
 
     @classmethod
