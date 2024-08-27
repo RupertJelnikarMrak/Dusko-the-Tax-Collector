@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from typing import Optional, List
+import time
 
 import wavelink
 
@@ -296,7 +297,7 @@ class MusicCog(commands.GroupCog, name='music'):
         if not player.queue.is_empty == True:
             for i in range(player.queue.count, 0, -1):
                 track = player.queue.peek(i - 1)
-                queue_content += f'{i}.  [{track.title}]({track.uri}) -- [{track.author}]({track.artist.url})\n'
+                queue_content += f'{i}.  [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
         else:
             queue_content = 'No audio in the queue.'
 
@@ -304,8 +305,9 @@ class MusicCog(commands.GroupCog, name='music'):
 
         if player.current:
             current_embed = Embed(title=player.current.title, url=player.current.uri, color=discord.Color.brand_red())
-            current_embed.set_author(name=f'[{player.current.author}]({player.current.artist.url}) -- [{player.current.album.name}]({player.current.album.url})', icon_url=player.current.artist.artwork)
+            current_embed.set_author(name=player.current.author, icon_url=player.current.artist.artwork)
             current_embed.set_image(url=player.current.artwork)
+            current_embed.set_footer(text=f'Ends <t:{(player.current.length/1000 - player.current.position/1000) + int(time.time())}:R> / {round(player.current.length/60000)}:{round(player.current.length/1000)%60}')
         else:
             current_embed = Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
         embeds.append(current_embed)
