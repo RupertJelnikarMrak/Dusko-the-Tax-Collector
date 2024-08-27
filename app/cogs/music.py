@@ -295,16 +295,11 @@ class MusicCog(commands.GroupCog, name='music'):
 
         queue_content = ''
         if not player.queue.is_empty == True:
-            size = player.queue.count
-            self.logger.debug(f'Queue size: {size}')
-            for i in range(size, 0, -1):
-                self.logger.debug(f'Peeking at {i} - 1')
-                track = player.queue.peek(i - 1)
-                queue_content += f'{i}.\u200B [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
+            for i in range(0, player.queue.count):
+                track = player.queue.peek(i)
+                queue_content += f'{i+1}.\u200B [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
         else:
             queue_content = 'No audio in the queue.'
-
-        embeds.append(Embed(title='Queue', description=queue_content, color=discord.Color.purple()))
 
         if player.current:
             current_embed = Embed(
@@ -316,6 +311,8 @@ class MusicCog(commands.GroupCog, name='music'):
             current_embed.set_image(url=player.current.artwork)
         else:
             current_embed = Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
+
+        embeds.append(Embed(title='Queue', description=queue_content, color=discord.Color.purple()))
         embeds.append(current_embed)
 
         return embeds
