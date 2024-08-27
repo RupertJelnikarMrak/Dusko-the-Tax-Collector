@@ -262,16 +262,16 @@ class MusicCog(commands.GroupCog, name='music'):
             button.callback = resume_song_callback
             view.add_item(button)
 
+        button = Button(label='Skip', style=ButtonStyle.gray, disabled=not player or not player.playing)
+        button.callback = skip_callback
+        view.add_item(button)
+
         button = Button(label='Stop', style=ButtonStyle.red, disabled=not player)
         button.callback = stop_callback
         view.add_item(button)
 
         button = Button(label='Add song', style=ButtonStyle.gray, row=1, disabled=not player)
         button.callback = add_song_callback
-        view.add_item(button)
-
-        button = Button(label='Skip', style=ButtonStyle.gray, row=1, disabled=not player or not player.playing)
-        button.callback = skip_callback
         view.add_item(button)
 
         # view.add_item(Button(label='Remove song', style=ButtonStyle.gray, row=1, disabled=not player or player.queue.is_empty))
@@ -295,7 +295,8 @@ class MusicCog(commands.GroupCog, name='music'):
 
         queue_content = ''
         if not player.queue.is_empty == True:
-            for i in range(player.queue.count, 0, -1):
+            size = player.queue.count
+            for i in range(size, 0, -1):
                 track = player.queue.peek(i - 1)
                 queue_content += f'{i}.  [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
         else:
