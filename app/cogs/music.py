@@ -279,7 +279,7 @@ class MusicCog(commands.GroupCog, name='music'):
 
         view.add_item(Button(label='Swap', style=ButtonStyle.gray, row=1, disabled=True))
 
-        view.add_item(Button(label='Clear queue', style=ButtonStyle.red, row=1, disabled=not player or player.queue.is_empty))
+        # view.add_item(Button(label='Clear queue', style=ButtonStyle.red, row=1, disabled=not player or player.queue.is_empty))
 
         return view
 
@@ -307,7 +307,7 @@ class MusicCog(commands.GroupCog, name='music'):
                     url=player.current.uri, color=discord.Color.brand_red(), 
                     description=f'Ends <t:{round((player.current.length/1000 - player.current.position/1000) + time.time())}:R> / {round(player.current.length/60000)}:{round(player.current.length/1000)%60}'
                     )
-            current_embed.set_author(name=player.current.author, icon_url=player.current.artist.artwork)
+            current_embed.set_author(name=player.current.author, icon_url=player.current.artist.artwork, url=player.current.artist.url)
             current_embed.set_image(url=player.current.artwork)
         else:
             current_embed = Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
