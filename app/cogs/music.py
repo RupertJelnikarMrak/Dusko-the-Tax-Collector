@@ -295,7 +295,7 @@ class MusicCog(commands.GroupCog, name='music'):
         queue_content = ''
         if not player.queue.is_empty == True:
             for i in range(player.queue.count - 1, -1, -1):
-                track = player.queue.get_at(i)
+                track = player.queue.peek(i)
                 queue_content += f'{i + 1}. [{track.title}]({track.uri})\n'
         else:
             queue_content = 'No audio in the queue.'
