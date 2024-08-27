@@ -307,7 +307,7 @@ class MusicCog(commands.GroupCog, name='music'):
             current_embed = Embed(title=player.current.title, url=player.current.uri, color=discord.Color.brand_red())
             current_embed.set_author(name=player.current.author, icon_url=player.current.artist.artwork)
             current_embed.set_image(url=player.current.artwork)
-            current_embed.set_footer(text=f'Ends <t:{(player.current.length/1000 - player.current.position/1000) + int(time.time())}:R> / {round(player.current.length/60000)}:{round(player.current.length/1000)%60}')
+            current_embed.set_footer(text=f'Ends <t:{round((player.current.length/1000 - player.current.position/1000) + time.time())}:R> / {round(player.current.length/60000)}:{round(player.current.length/1000)%60}')
         else:
             current_embed = Embed(title='Currently playing', color=discord.Color.red(), description='No audio playing. Add some to the queue!')
         embeds.append(current_embed)
