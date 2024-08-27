@@ -300,7 +300,7 @@ class MusicCog(commands.GroupCog, name='music'):
             for i in range(size, 0, -1):
                 self.logger.debug(f'Peeking at {i} - 1')
                 track = player.queue.peek(i - 1)
-                queue_content += f'{i}.  [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
+                queue_content += f'{i}.\u200B [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
         else:
             queue_content = 'No audio in the queue.'
 
