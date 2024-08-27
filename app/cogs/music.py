@@ -296,7 +296,9 @@ class MusicCog(commands.GroupCog, name='music'):
         queue_content = ''
         if not player.queue.is_empty == True:
             size = player.queue.count
+            self.logger.debug(f'Queue size: {size}')
             for i in range(size, 0, -1):
+                self.logger.debug(f'Peeking at {i} - 1')
                 track = player.queue.peek(i - 1)
                 queue_content += f'{i}.  [{track.title}]({track.uri}) -- {track.author} -- {round(track.length/60000)}:{round(track.length/1000)%60} \n'
         else:
@@ -319,7 +321,6 @@ class MusicCog(commands.GroupCog, name='music'):
         return embeds
 
     async def update_player_message(self, guild: discord.Guild) -> None:
-        self.logger.debug(f'Updating player message in guild {guild.id}...')
         async with AsyncEngineManager.get_session() as session:
             db_player_message = await session.get(MusicPlayer, guild.id)
             if not db_player_message:
